@@ -1,0 +1,398 @@
+---
+title: "The Trade Desk vs. S&P 500: Descriptive Equity-Market Analysis"
+author: "Sachhyam Manandhar"
+date: "2026-04-20"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  cache = FALSE,
+  fig.align = "center",
+  attr.source = ".numberLines"
+)
+```
+
+## 1. Introduction to TTD
+
+The Trade Desk, Inc. (`TTD`) is a technology company that operates a demand-side platform for digital advertising. Its platform helps advertisers and agencies buy and manage data-driven ad campaigns across channels such as display, video, audio, and connected TV. TTD is widely followed because it is closely tied to trends in digital advertising and programmatic media buying. In this report, I study TTD using five years of daily stock data from March 1, 2021 to March 1, 2026 and compare it with the S\&P 500 index.
+
+## 2. Retrieve TTD and S&P 500 Data
+
+```{r load-data}
+library(quantmod)
+library(zoo)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(mgcv)
+library(tidyr)
+
+start_date <- as.Date("2021-03-01")
+end_date <- as.Date("2026-03-01")
+
+TTD <- suppressWarnings(
+  getSymbols("TTD", src = "yahoo", from = start_date, to = end_date, auto.assign = FALSE)
+)
+
+GSPC <- suppressWarnings(
+  getSymbols("^GSPC", src = "yahoo", from = start_date, to = end_date, auto.assign = FALSE)
+)
+
+ttd_df <- TTD %>%
+  fortify.zoo() %>%
+  as_tibble() %>%
+  rename(date = Index)
+
+gspc_df <- GSPC %>%
+  fortify.zoo() %>%
+  as_tibble() %>%
+  rename(date = Index)
+
+adj_data <- TTD %>%
+  Ad() %>%
+  fortify.zoo() %>%
+  as_tibble() %>%
+  rename(date = Index, TTD.Adjusted = TTD.Adjusted) %>%
+  left_join(
+    GSPC %>%
+      Ad() %>%
+      fortify.zoo() %>%
+      as_tibble() %>%
+      rename(date = Index, GSPC.Adjusted = GSPC.Adjusted),
+    by = "date"
+  ) %>%
+  mutate(
+    Year = factor(year(date)),
+    YearNum = year(date)
+  ) %>%
+  drop_na()
+
+all_data <- TTD[, 1:5] %>%
+  fortify.zoo() %>%
+  as_tibble() %>%
+  rename(date = Index) %>%
+  left_join(
+    GSPC[, 1:5] %>%
+      fortify.zoo() %>%
+      as_tibble() %>%
+      rename(date = Index),
+    by = "date"
+  ) %>%
+  setNames(c(
+    "date", "TTD.Open", "TTD.High", "TTD.Low", "TTD.Close", "TTD.Volume",
+    "GSPC.Open", "GSPC.High", "GSPC.Low", "GSPC.Close", "GSPC.Volume"
+  )) %>%
+  mutate(Year = factor(year(date))) %>%
+  drop_na()
+
+nrow(ttd_df)
+nrow(gspc_df)
+```
+
+The sample contains `r nrow(ttd_df)` daily observations for TTD and `r nrow(gspc_df)` daily observations for the S\&P 500 over the period from `r start_date` to `r end_date`.
+
+## 3. OHLC Graph of TTD
+
+```{r ohlc-chart, fig.width=7, fig.height=4}
+chartSeries(TTD, type = "candlesticks", theme = chartTheme("white"), name = "TTD OHLC")
+```
+
+## 4. Histogram and Boxplot of TTD Adjusted Price
+
+```{r ttd-hist-box, fig.width=7, fig.height=4}
+par(mfrow = c(1, 2))
+hist(adj_data$TTD.Adjusted,
+     main = "Histogram of TTD Adjusted Price",
+     xlab = "TTD Adjusted Price",
+     col = "lightblue",
+     border = "white")
+
+
+boxplot(adj_data$TTD.Adjusted,
+        main = "Boxplot of TTD Adjusted Price",
+        ylab = "TTD Adjusted Price",
+        col = "lightgreen")
+par(mfrow = c(1, 1))
+```
+
+
+## 5. Summary Statistics of TTD Adjusted Price
+
+```{r}
+ttd_mean <- mean(adj_data$TTD.Adjusted)
+ttd_sd <- sd(adj_data$TTD.Adjusted)
+ttd_min <- min(adj_data$TTD.Adjusted)
+ttd_max <- max(adj_data$TTD.Adjusted)
+
+ttd_stats <- data.frame(
+  Mean = round(ttd_mean, 2),
+  SD = round(ttd_sd, 2),
+  Min = round(ttd_min, 2),
+  Max = round(ttd_max, 2)
+)
+
+knitr::kable(ttd_stats, caption = "Summary Statistics of TTD Adjusted Price")
+```
+
+During the sample period, the average TTD adjusted price is \$$`r round(ttd_mean, 2)`, the standard deviation is `r round(ttd_sd, 2)`, the minimum is \$$`r round(ttd_min, 2)`, and the maximum is \$$`r round(ttd_max, 2)`.
+
+## 6. Summary Statistics of the S&P 500 Adjusted Price
+
+```{r gspc-summary}
+gspc_mean <- mean(adj_data$GSPC.Adjusted)
+gspc_sd <- sd(adj_data$GSPC.Adjusted)
+gspc_min <- min(adj_data$GSPC.Adjusted)
+gspc_max <- max(adj_data$GSPC.Adjusted)
+
+gspc_stats <- data.frame(
+  Mean = round(gspc_mean, 2),
+  SD = round(gspc_sd, 2),
+  Min = round(gspc_min, 2),
+  Max = round(gspc_max, 2)
+)
+
+knitr::kable(gspc_stats, caption = "Summary Statistics of S&P 500 Adjusted Price")
+```
+
+During the same sample period, the average S\&P 500 adjusted price is `r round(gspc_mean, 2)`, the standard deviation is `r round(gspc_sd, 2)`, the minimum is `r round(gspc_min, 2)`, and the maximum is `r round(gspc_max, 2)`.
+
+## 7. Histogram and Boxplot of the S&P 500 Adjusted Price
+
+```{r gspc-hist-box, fig.width=7, fig.height=4}
+par(mfrow = c(1, 2))
+hist(adj_data$GSPC.Adjusted,
+     main = "Histogram of S&P 500 Adjusted Price",
+     xlab = "S&P 500 Adjusted Price",
+     col = "mistyrose",
+     border = "white")
+boxplot(adj_data$GSPC.Adjusted,
+        main = "Boxplot of S&P 500 Adjusted Price",
+        ylab = "S&P 500 Adjusted Price",
+        col = "khaki")
+par(mfrow = c(1, 1))
+```
+
+## 8. Scatterplot of TTD vs S&P 500 Adjusted Price
+
+```{r scatter-basic, fig.width=7, fig.height=5}
+plot(adj_data$GSPC.Adjusted, adj_data$TTD.Adjusted,
+     xlab = "S&P 500 Adjusted Price",
+     ylab = "TTD Adjusted Price",
+     main = "TTD vs S&P 500 Adjusted Price",
+     pch = 16, col = rgb(0, 0, 1, 0.35))
+```
+
+## 9. Linear Regression of TTD on the S&P 500
+
+```{r regression}
+reg_model <- lm(TTD.Adjusted ~ GSPC.Adjusted, data = adj_data)
+summary(reg_model)
+```
+
+
+The slope coefficient is positive and statistically significant, but the model has a low $R^2$ of `r round(summary(reg_model)$r.squared, 4)`, which suggests that daily variation in TTD prices is only weakly explained by the level of the S\&P 500 during this period.
+
+## 10. Scatterplot with Fitted Regression Line
+
+```{r scatter-line, fig.width=7, fig.height=5}
+plot(adj_data$GSPC.Adjusted, adj_data$TTD.Adjusted,
+     xlab = "S&P 500 Adjusted Price",
+     ylab = "TTD Adjusted Price",
+     main = "TTD vs S&P 500 with Fitted Regression Line",
+     pch = 16, col = rgb(0, 0, 1, 0.35))
+linear_model <- lm(TTD.Adjusted ~ GSPC.Adjusted, data = adj_data)
+abline(linear_model, col = "red", lwd = 2)
+```
+
+## 11. Pairwise Correlation Matrix and Visualization
+
+```{r correlation-matrix}
+
+library(kableExtra)
+
+
+cor_matrix <- round(cor(all_data[, 2:11]), 3)
+
+
+colnames(cor_matrix) <- c("T.Op", "T.Hi", "T.Lo", "T.Cl", "T.Vol", 
+                          "G.Op", "G.Hi", "G.Lo", "G.Cl", "G.Vol")
+rownames(cor_matrix) <- colnames(cor_matrix)
+
+knitr::kable(cor_matrix, 
+             format = "latex", 
+             booktabs = TRUE, 
+             caption = "10 x 10 Pairwise Correlation Matrix") %>%
+  kable_styling(latex_options = c("scale_down", "hold_position"), 
+                font_size = 8) %>%
+  row_spec(0, angle = 45) 
+```
+
+```{r correlation-plot, fig.width=7, fig.height=7}
+image(
+  1:ncol(cor_matrix), 1:nrow(cor_matrix), t(cor_matrix[nrow(cor_matrix):1, ]),
+  axes = FALSE,
+  xlab = "",
+  ylab = "",
+  col = colorRampPalette(c("navy", "white", "firebrick"))(200),
+  main = "Correlation Heatmap"
+)
+axis(1, at = 1:ncol(cor_matrix), labels = colnames(cor_matrix), las = 2, cex.axis = 0.7)
+axis(2, at = 1:nrow(cor_matrix), labels = rev(rownames(cor_matrix)), las = 2, cex.axis = 0.7)
+box()
+```
+
+```{r pairwise-scatterplots, fig.width=7, fig.height=7}
+pairs(all_data[, 2:11],
+      main = "Pairwise Scatterplots of TTD and S&P 500 Variables",
+      pch = 16,
+      cex = 0.3,
+      col = rgb(0, 0, 0, 0.2))
+```
+
+The TTD open, high, low, and close prices are all extremely highly correlated with one another, and the same pattern holds for the S\&P 500 price variables. Cross-market correlations between TTD prices and S\&P 500 prices are positive but much smaller, while the volume variables are more weakly related and in some cases negatively correlated.
+
+## 12. Nonlinear Relationship: Loess Smooth Fit
+
+```{r loess-scatter, fig.width=7, fig.height=5}
+plot(adj_data$GSPC.Adjusted, adj_data$TTD.Adjusted,
+     xlab = "S&P 500 Adjusted Price",
+     ylab = "TTD Adjusted Price",
+     main = "TTD vs S&P 500 with Loess Smooth",
+     pch = 16, col = rgb(0, 0, 1, 0.3))
+
+loess_fit <- loess(TTD.Adjusted ~ GSPC.Adjusted, data = adj_data)
+ord <- order(adj_data$GSPC.Adjusted)
+lines(adj_data$GSPC.Adjusted[ord], predict(loess_fit)[ord], col = "darkorange", lwd = 2)
+```
+
+The loess curve is a nonparametric method because it does not assume one fixed global functional form for the relationship. It suggests that the relationship between TTD and the S\&P 500 is not perfectly linear, especially because TTD experienced large swings at intermediate S\&P 500 levels.
+
+## 13. Five-Day Moving Average Function
+
+```{r moving-average-function}
+five_day_ma <- function(x) {
+  as.numeric(stats::filter(x, rep(1 / 5, 5), sides = 1))
+}
+```
+
+
+
+## 14. Apply the Function to TTD and S&P 500, and Decompose TTD
+
+```{r apply-ma}
+adj_data$TTD.MA <- five_day_ma(adj_data$TTD.Adjusted)
+adj_data$GSPC.MA <- five_day_ma(adj_data$GSPC.Adjusted)
+
+ma_data <- na.omit(adj_data)
+head(ma_data)
+```
+
+```{r stl-decomposition, fig.width=7, fig.height=6}
+ttd_monthly <- adj_data %>%
+  mutate(Month = as.Date(cut(date, breaks = "month"))) %>%
+  group_by(Month) %>%
+  summarise(TTD.Adjusted = mean(TTD.Adjusted), .groups = "drop")
+
+ttd_ts <- ts(ttd_monthly$TTD.Adjusted, frequency = 12, start = c(year(min(ttd_monthly$Month)), month(min(ttd_monthly$Month))))
+ttd_stl <- stl(ttd_ts, s.window = "periodic")
+plot(ttd_stl, main = "STL Decomposition of Monthly TTD Adjusted Price")
+```
+
+
+
+## 15. Scatterplot of TTD.MA vs GSPC.MA with Fitted Linear Regression Line
+
+```{r ma-linear, fig.width=7, fig.height=5}
+ma_linear_model <- lm(TTD.MA ~ GSPC.MA, data = ma_data)
+
+plot(ma_data$GSPC.MA, ma_data$TTD.MA,
+     xlab = "S&P 500 Five-Day Moving Average",
+     ylab = "TTD Five-Day Moving Average",
+     main = "TTD.MA vs GSPC.MA with Linear Fit",
+     pch = 16, col = rgb(0, 0.5, 0, 0.35))
+abline(ma_linear_model, col = "red", lwd = 2)
+```
+
+## 16. Polynomial Regression Fits of Orders 2, 3, 4, and 5
+
+```{r polynomial-models}
+poly_results <- data.frame(
+  Degree = 2:5,
+  R_Squared = NA_real_,
+  Adjusted_R_Squared = NA_real_,
+  AIC = NA_real_
+)
+
+for (i in 2:5) {
+  model_i <- lm(TTD.MA ~ poly(GSPC.MA, i), data = ma_data)
+  poly_results$R_Squared[poly_results$Degree == i] <- summary(model_i)$r.squared
+  poly_results$Adjusted_R_Squared[poly_results$Degree == i] <- summary(model_i)$adj.r.squared
+  poly_results$AIC[poly_results$Degree == i] <- AIC(model_i)
+}
+
+poly_results[, 2:4] <- round(poly_results[, 2:4], 4)
+knitr::kable(poly_results, caption = "Polynomial Regression Comparison for TTD.MA on GSPC.MA")
+```
+
+```{r poly-2, fig.width=7, fig.height=5}
+model1 <- lm(TTD.MA ~ GSPC.MA, data = ma_data)
+model2 <- lm(TTD.MA ~ poly(GSPC.MA, 2), data = ma_data)
+xgrid <- seq(min(ma_data$GSPC.MA), max(ma_data$GSPC.MA), length.out = 300)
+
+plot(ma_data$GSPC.MA, ma_data$TTD.MA,
+     xlab = "GSPC.MA",
+     ylab = "TTD.MA",
+     main = "Degree 2 Polynomial Fit",
+     pch = 16, col = rgb(0, 0, 1, 0.25))
+ord <- order(ma_data$GSPC.MA)
+lines(ma_data$GSPC.MA[ord], fitted(model2)[ord], col = "red", lwd = 2)
+```
+
+```{r poly-3, fig.width=7, fig.height=5}
+model3 <- lm(TTD.MA ~ poly(GSPC.MA, 3), data = ma_data)
+
+plot(ma_data$GSPC.MA, ma_data$TTD.MA,
+     xlab = "GSPC.MA",
+     ylab = "TTD.MA",
+     main = "Degree 3 Polynomial Fit",
+     pch = 16, col = rgb(0, 0, 1, 0.25))
+lines(ma_data$GSPC.MA[ord], fitted(model3)[ord], col = "red", lwd = 2)
+```
+
+```{r poly-4, fig.width=7, fig.height=5}
+model4 <- lm(TTD.MA ~ poly(GSPC.MA, 4), data = ma_data)
+
+plot(ma_data$GSPC.MA, ma_data$TTD.MA,
+     xlab = "GSPC.MA",
+     ylab = "TTD.MA",
+     main = "Degree 4 Polynomial Fit",
+     pch = 16, col = rgb(0, 0, 1, 0.25))
+lines(ma_data$GSPC.MA[ord], fitted(model4)[ord], col = "red", lwd = 2)
+```
+
+```{r poly-5, fig.width=7, fig.height=5}
+model5 <- lm(TTD.MA ~ poly(GSPC.MA, 5), data = ma_data)
+
+plot(ma_data$GSPC.MA, ma_data$TTD.MA,
+     xlab = "GSPC.MA",
+     ylab = "TTD.MA",
+     main = "Degree 5 Polynomial Fit",
+     pch = 16, col = rgb(0, 0, 1, 0.25))
+lines(ma_data$GSPC.MA[ord], fitted(model5)[ord], col = "red", lwd = 2)
+```
+
+```{r anova-comparisons}
+anova(model1, model2)
+anova(model2, model3)
+anova(model3, model4)
+anova(model4, model5)
+```
+
+We use orthogonal polynomials with the poly() function to avoid issues with multicollinearity, so each higher-order term adds its own unique contribution to the model. Then, we run an ANOVA test to compare simpler models with more complex ones and see whether adding those extra polynomial terms actually improves the fit in a meaningful way.
+
+Interpret these comparisons as **descriptive, in-sample model fits**. Daily price levels can be nonstationary and serially dependent, so additional checks would be necessary before making statistical or predictive claims.
