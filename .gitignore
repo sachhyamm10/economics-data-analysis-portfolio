@@ -1,0 +1,27 @@
+# R/RStudio generated and environment files
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+.Rcheck/
+.Renviron
+renv/library/
+*_cache/
+*_files/
+*.html
+*.log
+*.aux
+*.out
+*.tex
+
+# Raw local data not vetted for redistribution
+*.csv
+*.xlsx
+*.rds
+*.RDS
+*.parquet
+
+# OS/editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/
